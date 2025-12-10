@@ -24,15 +24,6 @@ This benchmark is designed specifically for **Raspberry Pi 5** running as an Eth
 - DietPi
 - Debian (12+)
 
-### Recommended Hardware (Raspberry Pi 5)
-
-| Component | Minimum | Recommended |
-|-----------|---------|-------------|
-| Model | Raspberry Pi 5 4GB | Raspberry Pi 5 8GB |
-| Storage | 256GB NVMe SSD | 1TB+ NVMe SSD |
-| Cooling | Passive heatsink | Active cooler |
-| Power | Official 27W PSU | Official 27W PSU |
-
 ### Optional Tools
 
 For baseline comparison, you can install:
