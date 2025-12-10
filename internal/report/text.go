@@ -49,6 +49,12 @@ func FormatText(r *Report) string {
 		if r.System.CoreVoltage != "" {
 			sb.WriteString(fmt.Sprintf("  Core Voltage:  %s\n", r.System.CoreVoltage))
 		}
+		if len(r.System.CPUFeatures) > 0 {
+			relevant := filterRelevantCPUFeatures(r.System.CPUFeatures)
+			if len(relevant) > 0 {
+				sb.WriteString(fmt.Sprintf("  CPU Features:  %s\n", strings.Join(relevant, ", ")))
+			}
+		}
 	}
 
 	// CPU Benchmarks
@@ -152,4 +158,28 @@ func FormatText(r *Report) string {
 	sb.WriteString(strings.Repeat("=", 80) + "\n")
 
 	return sb.String()
+}
+
+// filterRelevantCPUFeatures returns Ethereum-relevant CPU features
+func filterRelevantCPUFeatures(features []string) []string {
+	// Features important for Ethereum node operations
+	relevant := map[string]bool{
+		"asimd":   true, // NEON/SIMD - crypto operations
+		"aes":     true, // AES acceleration - DevP2P encryption
+		"sha1":    true, // SHA-1 acceleration
+		"sha2":    true, // SHA-256 acceleration
+		"sha3":    true, // SHA-3/Keccak acceleration
+		"crc32":   true, // CRC32 acceleration
+		"pmull":   true, // Polynomial multiply - GCM crypto
+		"atomics": true, // LSE atomics - concurrency
+		"fp":      true, // Floating point
+	}
+
+	var result []string
+	for _, f := range features {
+		if relevant[f] {
+			result = append(result, f)
+		}
+	}
+	return result
 }

@@ -26,13 +26,14 @@ type Info struct {
 	DiskModel    string `json:"disk_model"`
 
 	// Raspberry Pi specific
-	RPiModel          string `json:"rpi_model,omitempty"`
-	KernelVersion     string `json:"kernel_version,omitempty"`
-	GPUFirmware       string `json:"gpu_firmware,omitempty"`
-	BootloaderVersion string `json:"bootloader_version,omitempty"`
-	CPUGovernor       string `json:"cpu_governor,omitempty"`
-	CPUFreqMHz        int    `json:"cpu_freq_mhz,omitempty"`
-	CoreVoltage       string `json:"core_voltage,omitempty"`
+	RPiModel          string   `json:"rpi_model,omitempty"`
+	KernelVersion     string   `json:"kernel_version,omitempty"`
+	GPUFirmware       string   `json:"gpu_firmware,omitempty"`
+	BootloaderVersion string   `json:"bootloader_version,omitempty"`
+	CPUGovernor       string   `json:"cpu_governor,omitempty"`
+	CPUFreqMHz        int      `json:"cpu_freq_mhz,omitempty"`
+	CoreVoltage       string   `json:"core_voltage,omitempty"`
+	CPUFeatures       []string `json:"cpu_features,omitempty"`
 }
 
 // Detect gathers system information
@@ -71,6 +72,7 @@ func Detect() (*Info, error) {
 	info.CPUGovernor = detectCPUGovernor()
 	info.CPUFreqMHz = detectCPUFrequency()
 	info.CoreVoltage = detectCoreVoltage()
+	info.CPUFeatures = detectCPUFeatures()
 
 	return info, nil
 }
@@ -338,6 +340,28 @@ func detectCoreVoltage() string {
 	result := strings.TrimSpace(string(output))
 	result = strings.TrimPrefix(result, "volt=")
 	return result
+}
+
+// detectCPUFeatures reads CPU features from /proc/cpuinfo
+// On ARM64, this includes NEON (asimd), AES, SHA, CRC32, etc.
+func detectCPUFeatures() []string {
+	file, err := os.Open("/proc/cpuinfo")
+	if err != nil {
+		return nil
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "Features") {
+			parts := strings.SplitN(line, ":", 2)
+			if len(parts) == 2 {
+				return strings.Fields(strings.TrimSpace(parts[1]))
+			}
+		}
+	}
+	return nil
 }
 
 // CheckPrerequisites verifies that required tools are available
