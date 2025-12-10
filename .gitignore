@@ -1,0 +1,16 @@
+# Build output
+build/
+
+# Samples (Geth/Nimbus source references)
+samples/
+
+# Test artifacts
+*.dat
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
