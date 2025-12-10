@@ -15,6 +15,7 @@ type stateObject struct {
 	originStorage  map[[32]byte][32]byte // Original values
 	dirtyStorage   map[[32]byte][32]byte // Modified values
 	pendingStorage map[[32]byte][32]byte // Pending commit
+	storageKeys    [][32]byte            // Keys for fast random access
 }
 
 // BenchmarkStateCache measures state access patterns
@@ -36,6 +37,7 @@ func BenchmarkStateCache(duration time.Duration, verbose bool) types.StateCacheR
 			originStorage:  make(map[[32]byte][32]byte),
 			dirtyStorage:   make(map[[32]byte][32]byte),
 			pendingStorage: make(map[[32]byte][32]byte),
+			storageKeys:    make([][32]byte, 0, 50),
 		}
 		rand.Read(obj.data)
 
@@ -45,24 +47,11 @@ func BenchmarkStateCache(duration time.Duration, verbose bool) types.StateCacheR
 			rand.Read(key[:])
 			rand.Read(val[:])
 			obj.originStorage[key] = val
+			obj.storageKeys = append(obj.storageKeys, key) // Store keys for this object
 		}
 
 		cache[addr] = obj
 		addresses = append(addresses, addr)
-	}
-
-	// Collect storage keys for random access
-	storageKeys := make([][32]byte, 0, 100)
-	for _, obj := range cache {
-		for key := range obj.originStorage {
-			storageKeys = append(storageKeys, key)
-			if len(storageKeys) >= 100 {
-				break
-			}
-		}
-		if len(storageKeys) >= 100 {
-			break
-		}
 	}
 
 	var hits, misses uint64
@@ -74,15 +63,14 @@ func BenchmarkStateCache(duration time.Duration, verbose bool) types.StateCacheR
 		// This simulates the pattern where most accessed accounts are already cached
 		opIndex := hits + misses
 		if opIndex%5 < 4 { // 80% of the time
-			// Cache hit path
+			// Cache hit path - access existing account
 			idx := int(opIndex) % len(addresses)
 			addr := addresses[idx]
 			obj := cache[addr]
 
-			// Simulate storage access pattern
-			// Reference: geth/core/state/state_object.go GetState
-			keyIdx := int(opIndex) % len(storageKeys)
-			key := storageKeys[keyIdx]
+			// Use a key that belongs to THIS object
+			keyIdx := int(opIndex) % len(obj.storageKeys)
+			key := obj.storageKeys[keyIdx]
 
 			// Check dirty first, then pending, then origin
 			// This mirrors Geth's GetState() logic
@@ -98,7 +86,7 @@ func BenchmarkStateCache(duration time.Duration, verbose bool) types.StateCacheR
 				hits++
 				totalBytes += 32
 			} else {
-				// Key not found in this object, but we did access the object
+				// Should not happen with correct keys
 				misses++
 				totalBytes += 32
 			}
