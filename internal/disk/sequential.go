@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"os"
 	"path/filepath"
+	"syscall"
 	"time"
 
 	"github.com/vBenchmark/internal/types"
@@ -21,7 +22,7 @@ func BenchmarkSequential(testDir string, duration time.Duration, verbose bool) t
 	testFile := filepath.Join(testDir, "ethbench_seq_test.dat")
 	defer os.Remove(testFile)
 
-	// Phase 1: Sequential writes
+	// Phase 1: Sequential writes with sync
 	writeDuration := duration / 2
 	var totalWritten uint64
 	writeStart := time.Now()
@@ -31,10 +32,13 @@ func BenchmarkSequential(testDir string, duration time.Duration, verbose bool) t
 		return types.SequentialResult{Rating: "Error: " + err.Error()}
 	}
 
+	// Pre-allocate buffer to avoid GC during benchmark
+	buffer := make([]byte, 1024*1024)
+	rand.Read(buffer)
+
 	for time.Since(writeStart) < writeDuration {
 		for _, blockSize := range blockSizes {
-			data := make([]byte, blockSize)
-			rand.Read(data)
+			data := buffer[:blockSize]
 			n, err := f.Write(data)
 			if err != nil {
 				break
@@ -48,12 +52,11 @@ func BenchmarkSequential(testDir string, duration time.Duration, verbose bool) t
 	writeElapsed := time.Since(writeStart)
 	writeSpeed := float64(totalWritten) / writeElapsed.Seconds() / (1024 * 1024)
 
-	// Phase 2: Sequential reads
+	// Phase 2: Sequential reads - bypass page cache
 	readDuration := duration / 2
 	var totalRead uint64
-	readStart := time.Now()
 
-	f, err = os.Open(testFile)
+	f, err = os.OpenFile(testFile, os.O_RDONLY, 0)
 	if err != nil {
 		return types.SequentialResult{
 			WriteSpeedMBps: writeSpeed,
@@ -61,12 +64,21 @@ func BenchmarkSequential(testDir string, duration time.Duration, verbose bool) t
 		}
 	}
 
-	buffer := make([]byte, 1024*1024) // 1MB read buffer
+	// Drop page cache for this file using fadvise
+	fd := int(f.Fd())
+	fileInfo, _ := f.Stat()
+	fileSize := fileInfo.Size()
+	syscall.Syscall6(syscall.SYS_FADVISE64, uintptr(fd), 0, uintptr(fileSize), uintptr(4), 0, 0) // POSIX_FADV_DONTNEED = 4
+
+	readStart := time.Now()
+	readBuffer := make([]byte, 1024*1024) // 1MB read buffer
+
 	for time.Since(readStart) < readDuration {
-		n, err := f.Read(buffer)
+		n, err := f.Read(readBuffer)
 		if err != nil {
-			// Loop back to start of file
+			// Loop back to start of file, drop cache again
 			f.Seek(0, 0)
+			syscall.Syscall6(syscall.SYS_FADVISE64, uintptr(fd), 0, uintptr(fileSize), uintptr(4), 0, 0)
 			continue
 		}
 		totalRead += uint64(n)

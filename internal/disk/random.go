@@ -2,8 +2,10 @@ package disk
 
 import (
 	"crypto/rand"
+	mathrand "math/rand"
 	"os"
 	"path/filepath"
+	"syscall"
 	"time"
 
 	"github.com/vBenchmark/internal/types"
@@ -13,13 +15,13 @@ import (
 // This simulates trie node lookups during EVM execution
 // Reference: geth/trie/trie.go resolveAndTrack()
 func BenchmarkRandom(testDir string, duration time.Duration, verbose bool) types.RandomResult {
-	const blockSize = 4096           // 4KB - typical trie node size
-	const fileSize = 256 * 1024 * 1024 // 256MB test file
+	const blockSize = 4096                 // 4KB - typical trie node size
+	const fileSize = 1024 * 1024 * 1024    // 1GB test file - larger than typical cache
 
 	testFile := filepath.Join(testDir, "ethbench_random_test.dat")
 	defer os.Remove(testFile)
 
-	// Create test file with random data
+	// Create and populate test file
 	f, err := os.OpenFile(testFile, os.O_CREATE|os.O_RDWR, 0644)
 	if err != nil {
 		return types.RandomResult{Rating: "Error: " + err.Error()}
@@ -31,15 +33,20 @@ func BenchmarkRandom(testDir string, duration time.Duration, verbose bool) types
 		return types.RandomResult{Rating: "Error: " + err.Error()}
 	}
 
-	// Fill with some random data at regular intervals
+	// Fill with random data at intervals to ensure file is actually allocated
 	data := make([]byte, blockSize)
-	for offset := int64(0); offset < fileSize; offset += 1024 * 1024 {
+	for offset := int64(0); offset < fileSize; offset += 4 * 1024 * 1024 { // Every 4MB
 		rand.Read(data)
 		f.WriteAt(data, offset)
 	}
 	f.Sync()
 
 	numBlocks := fileSize / blockSize
+	rng := mathrand.New(mathrand.NewSource(time.Now().UnixNano()))
+
+	// Drop page cache before reading
+	fd := int(f.Fd())
+	syscall.Syscall6(syscall.SYS_FADVISE64, uintptr(fd), 0, uintptr(fileSize), uintptr(4), 0, 0) // POSIX_FADV_DONTNEED = 4
 
 	// Phase 1: Random reads (simulates trie lookups)
 	readDuration := duration * 3 / 5
@@ -48,8 +55,8 @@ func BenchmarkRandom(testDir string, duration time.Duration, verbose bool) types
 
 	readStart := time.Now()
 	for time.Since(readStart) < readDuration {
-		// Random offset within file
-		blockNum := int64(readOps) % int64(numBlocks)
+		// Truly random offset within file
+		blockNum := rng.Int63n(int64(numBlocks))
 		offset := blockNum * blockSize
 
 		opStart := time.Now()
@@ -63,21 +70,25 @@ func BenchmarkRandom(testDir string, duration time.Duration, verbose bool) types
 	readElapsed := time.Since(readStart)
 	readIOPS := float64(readOps) / readElapsed.Seconds()
 
-	// Phase 2: Random writes (simulates dirty node flushes)
+	// Phase 2: Random writes with sync (simulates dirty node flushes)
 	writeDuration := duration * 2 / 5
 	var writeOps uint64
 	var totalWriteLatency time.Duration
 
 	writeStart := time.Now()
 	for time.Since(writeStart) < writeDuration {
-		// Random offset within file
-		blockNum := int64(writeOps) % int64(numBlocks)
+		// Truly random offset within file
+		blockNum := rng.Int63n(int64(numBlocks))
 		offset := blockNum * blockSize
 
 		rand.Read(data)
 
 		opStart := time.Now()
 		_, err := f.WriteAt(data, offset)
+		// Sync periodically to measure real write latency (every 100 ops)
+		if writeOps%100 == 99 {
+			f.Sync()
+		}
 		totalWriteLatency += time.Since(opStart)
 
 		if err == nil {
