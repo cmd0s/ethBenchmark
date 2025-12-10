@@ -1,6 +1,7 @@
-# Ethereum Node Benchmark (ethbench)
+# An Unofficial Ethereum Node Benchmark (ethbench)
 
-A specialized benchmark tool for measuring hardware performance relevant to Ethereum node operations (Geth + Nimbus).
+An specialized benchmark tool for measuring hardware performance relevant to Ethereum node operations (Geth + Nimbus).   
+Not affiliated with Ethereum Foundation, Geth, or Nimbus teams.
 
 ## Target Platform: Raspberry Pi 5
 
