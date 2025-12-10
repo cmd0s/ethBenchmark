@@ -1,41 +1,47 @@
 # Ethereum Node Benchmark (ethbench)
 
-A specialized benchmark tool for measuring hardware performance relevant to Ethereum node operations (Geth + Nimbus). Designed for Raspberry Pi 5 and similar ARM64 devices.
+A specialized benchmark tool for measuring hardware performance relevant to Ethereum node operations (Geth + Nimbus).
+
+## Target Platform: Raspberry Pi 5
+
+This benchmark is designed specifically for **Raspberry Pi 5** running as an Ethereum validator. The tests Ethereum node workloads and help you verify that your hardware configuration is suitable for running both execution (Geth) and consensus (Nimbus) clients.
 
 ## Features
 
-- **CPU Benchmarks**: Keccak256 hashing, ECDSA/secp256k1 signatures, BLS12-381 operations, BN256 pairing
+- **CPU Benchmarks**: Keccak256 hashing, ECDSA/secp256k1 signatures, BLS12-381 operations (using gnark-crypto), BN256 pairing
 - **Memory Benchmarks**: Merkle Patricia Trie simulation, object pool allocation, state cache patterns
-- **Disk Benchmarks**: Sequential I/O, random 4K I/O, batch write simulation
+- **Disk Benchmarks**: Sequential I/O, random 4K I/O (bypasses page cache), batch write simulation
+- **Raspberry Pi 5 Detection**: Model, GPU firmware, bootloader version, kernel, CPU governor/frequency, core voltage
 - **Ethereum-Focused**: Tests based on actual Geth and Nimbus operation patterns
 - **Scoring System**: Hardware readiness verdict for running Ethereum nodes
 
 ## System Requirements
 
 ### Supported Operating Systems
-- Ubuntu (20.04+)
+- Ubuntu (24.04+ recommended)
+- Raspberry Pi OS (64-bit)
 - Armbian
 - DietPi
-- Debian (11+)
+- Debian (12+)
 
-### Required Tools
+### Recommended Hardware (Raspberry Pi 5)
 
-Before running the benchmark, install the following tools:
+| Component | Minimum | Recommended |
+|-----------|---------|-------------|
+| Model | Raspberry Pi 5 4GB | Raspberry Pi 5 8GB |
+| Storage | 256GB NVMe SSD | 1TB+ NVMe SSD |
+| Cooling | Passive heatsink | Active cooler |
+| Power | Official 27W PSU | Official 27W PSU |
+
+### Optional Tools
+
+For baseline comparison, you can install:
 
 ```bash
 # Ubuntu/Debian
 sudo apt update
-sudo apt install -y sysbench fio
-
-# Verify installation
-sysbench --version
-fio --version
+sudo apt install -y fio stress-ng
 ```
-
-### Hardware
-- ARM64 or x86_64 architecture
-- Minimum 2GB RAM (4GB+ recommended)
-- SSD/NVMe storage recommended
 
 ## Installation
 
@@ -154,4 +160,4 @@ Score weights:
 
 ## License
 
-MIT License
+GNU GENERAL PUBLIC LICENSE version 3

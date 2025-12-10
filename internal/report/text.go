@@ -27,6 +27,30 @@ func FormatText(r *Report) string {
 	sb.WriteString(fmt.Sprintf("  RAM:           %d MB\n", r.System.RAMTotalMB))
 	sb.WriteString(fmt.Sprintf("  Storage:       %s\n", r.System.DiskModel))
 
+	// Raspberry Pi specific information
+	if r.System.RPiModel != "" {
+		sb.WriteString("\n  --- Raspberry Pi Details ---\n")
+		sb.WriteString(fmt.Sprintf("  Model:         %s\n", r.System.RPiModel))
+		if r.System.KernelVersion != "" {
+			sb.WriteString(fmt.Sprintf("  Kernel:        %s\n", r.System.KernelVersion))
+		}
+		if r.System.GPUFirmware != "" {
+			sb.WriteString(fmt.Sprintf("  GPU Firmware:  %s\n", r.System.GPUFirmware))
+		}
+		if r.System.BootloaderVersion != "" {
+			sb.WriteString(fmt.Sprintf("  Bootloader:    %s\n", r.System.BootloaderVersion))
+		}
+		if r.System.CPUGovernor != "" {
+			sb.WriteString(fmt.Sprintf("  CPU Governor:  %s\n", r.System.CPUGovernor))
+		}
+		if r.System.CPUFreqMHz > 0 {
+			sb.WriteString(fmt.Sprintf("  CPU Frequency: %d MHz\n", r.System.CPUFreqMHz))
+		}
+		if r.System.CoreVoltage != "" {
+			sb.WriteString(fmt.Sprintf("  Core Voltage:  %s\n", r.System.CoreVoltage))
+		}
+	}
+
 	// CPU Benchmarks
 	sb.WriteString("\n" + strings.Repeat("=", 80) + "\n")
 	sb.WriteString("CPU BENCHMARKS (Execution Layer Critical)\n")

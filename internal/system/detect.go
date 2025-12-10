@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -23,6 +24,15 @@ type Info struct {
 	CPUCores     int    `json:"cpu_cores"`
 	RAMTotalMB   int    `json:"ram_total_mb"`
 	DiskModel    string `json:"disk_model"`
+
+	// Raspberry Pi specific
+	RPiModel          string `json:"rpi_model,omitempty"`
+	KernelVersion     string `json:"kernel_version,omitempty"`
+	GPUFirmware       string `json:"gpu_firmware,omitempty"`
+	BootloaderVersion string `json:"bootloader_version,omitempty"`
+	CPUGovernor       string `json:"cpu_governor,omitempty"`
+	CPUFreqMHz        int    `json:"cpu_freq_mhz,omitempty"`
+	CoreVoltage       string `json:"core_voltage,omitempty"`
 }
 
 // Detect gathers system information
@@ -52,6 +62,15 @@ func Detect() (*Info, error) {
 
 	// Get disk model
 	info.DiskModel = detectDiskModel()
+
+	// Raspberry Pi specific detection
+	info.RPiModel = detectRPiModel()
+	info.KernelVersion = detectKernelVersion()
+	info.GPUFirmware = detectGPUFirmware()
+	info.BootloaderVersion = detectBootloaderVersion()
+	info.CPUGovernor = detectCPUGovernor()
+	info.CPUFreqMHz = detectCPUFrequency()
+	info.CoreVoltage = detectCoreVoltage()
 
 	return info, nil
 }
@@ -222,6 +241,103 @@ func detectDiskModel() string {
 	}
 
 	return "unknown"
+}
+
+// detectRPiModel reads Raspberry Pi model from device tree
+func detectRPiModel() string {
+	data, err := os.ReadFile("/proc/device-tree/model")
+	if err != nil {
+		return ""
+	}
+	model := strings.TrimSpace(string(data))
+	model = strings.ReplaceAll(model, "\x00", "")
+	return model
+}
+
+// detectKernelVersion reads kernel version
+func detectKernelVersion() string {
+	data, err := os.ReadFile("/proc/version")
+	if err != nil {
+		return ""
+	}
+	// Extract just the version part (e.g., "Linux version 6.1.0-rpi7-rpi-v8")
+	parts := strings.Fields(string(data))
+	if len(parts) >= 3 {
+		return parts[2]
+	}
+	return strings.TrimSpace(string(data))
+}
+
+// detectGPUFirmware runs vcgencmd to get GPU firmware version
+func detectGPUFirmware() string {
+	cmd := exec.Command("vcgencmd", "version")
+	output, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	// Extract date from output (e.g., "Dec  5 2024 ...")
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
+		if strings.HasPrefix(line, "version") {
+			return strings.TrimSpace(strings.TrimPrefix(line, "version"))
+		}
+		// First line usually contains date
+		if len(line) > 0 && !strings.HasPrefix(line, "version") {
+			return strings.TrimSpace(line)
+		}
+	}
+	return strings.TrimSpace(string(output))
+}
+
+// detectBootloaderVersion runs vcgencmd to get bootloader version
+func detectBootloaderVersion() string {
+	cmd := exec.Command("vcgencmd", "bootloader_version")
+	output, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	// First line contains the date
+	lines := strings.Split(string(output), "\n")
+	if len(lines) > 0 {
+		return strings.TrimSpace(lines[0])
+	}
+	return ""
+}
+
+// detectCPUGovernor reads current CPU scaling governor
+func detectCPUGovernor() string {
+	data, err := os.ReadFile("/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor")
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(data))
+}
+
+// detectCPUFrequency reads current CPU frequency in MHz
+func detectCPUFrequency() int {
+	data, err := os.ReadFile("/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq")
+	if err != nil {
+		return 0
+	}
+	// Value is in kHz, convert to MHz
+	freqKHz, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil {
+		return 0
+	}
+	return freqKHz / 1000
+}
+
+// detectCoreVoltage runs vcgencmd to get core voltage
+func detectCoreVoltage() string {
+	cmd := exec.Command("vcgencmd", "measure_volts", "core")
+	output, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	// Output is like "volt=0.8700V"
+	result := strings.TrimSpace(string(output))
+	result = strings.TrimPrefix(result, "volt=")
+	return result
 }
 
 // CheckPrerequisites verifies that required tools are available
